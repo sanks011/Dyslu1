@@ -19,6 +19,67 @@ try {
   console.error('Error initializing OpenAI:', error);
 }
 
+// TypewriterMessage component for animated text
+const TypewriterMessage = ({ content, onComplete, audioUrl }) => {
+  const [displayedContent, setDisplayedContent] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const audioRef = useRef(null);
+  const contentArray = useRef(content.split(''));
+  
+  useEffect(() => {
+    let index = 0;
+    audioRef.current = new Audio(audioUrl);
+    
+    // Add audio completion listener
+    audioRef.current.addEventListener('ended', () => {
+      setIsAudioPlaying(false);
+      onComplete?.();
+    });
+    
+    const startTypewriter = () => {
+      setIsTyping(true);
+      setIsAudioPlaying(true);
+      audioRef.current.play();
+      
+      const interval = setInterval(() => {
+        if (index < contentArray.current.length) {
+          setDisplayedContent(contentArray.current.slice(0, index + 1).join(''));
+          index++;
+        } else {
+          clearInterval(interval);
+          setIsTyping(false);
+          // Note: We don't call onComplete here anymore
+        }
+      }, 50);
+      
+      return () => {
+        clearInterval(interval);
+      };
+    };
+    
+    startTypewriter();
+    
+    return () => {
+      audioRef.current.removeEventListener('ended', () => {
+        setIsAudioPlaying(false);
+        onComplete?.();
+      });
+      audioRef.current?.pause();
+    };
+  }, [content, onComplete, audioUrl]);
+  
+  return (
+    <div className="text-gray-200">
+      {displayedContent}
+      {(isTyping || isAudioPlaying) && (
+        <span className="inline-block w-1 h-4 ml-1 bg-blue-400 animate-pulse" />
+      )}
+    </div>
+  );
+};
+
+
 const VoiceAssistant = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [rippleEffect, setRippleEffect] = useState(false);
@@ -26,6 +87,7 @@ const VoiceAssistant = () => {
   const [messages, setMessages] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
+  const [currentAudioUrl, setCurrentAudioUrl] = useState(null);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -72,121 +134,14 @@ const VoiceAssistant = () => {
 
     initializeMediaRecorder();
   }, []);
-   const promptArray = [
-  {
-    role: 'system',
-    content: `You are an experienced therapist specializing in helping dyslexic individuals, especially children. Your tone should be gentle, joyful, and therapeutic, making every conversation feel warm and supportive. Speak in a way that builds confidence, using positive reinforcement and simple explanations to make learning enjoyable. Adapt your responses to be clear, engaging, and encouraging, using storytelling, metaphors, and interactive techniques when needed. Always respond with empathy and patience, ensuring the child feels understood and motivated. After every answer, ask a gentle, open-ended question to keep the conversation flowing. You can also communicate in different languages if it helps the child feel more comfortable.`
-  },
+  const promptArray = [
+    {
+      role: 'system',
+      content: "You are an experienced therapist specializing in helping dyslexic individuals, especially children. Your tone should be gentle, joyful, and therapeutic, making every conversation feel warm and supportive. Speak in a way that builds confidence, using positive reinforcement and simple explanations to make learning enjoyable. Adapt your responses to be clear, engaging, and encouraging, using storytelling, metaphors, and interactive techniques when needed. Always respond with empathy and patience, ensuring the child feels understood and motivated. After every answer, ask a gentle, open-ended question to keep the conversation flowing. also while talking dont just generate points and say that steps that you can take... talk like normal people.. suppose a person has come to seek help from you and you are a very knowledgable person in this field.. so you can talk like a normal person and give them advice like normal people.. suppose user said Hello, I am very sad today because a friend of mine bullied me in school. I can't share this with my parents. Please can you help me? What should I do? I am feeling very low today.   then you  should not say like Here are a few things you can consider doing: 1. **Talk to someone you trust:** While you may not feel comfortable talking to your parents about this, is there someone else you trust, like a teacher, school counselor, or another friend? Sometimes sharing your feelings with someone supportive can help you feel better. 2. **Take care of yourself:** Engage in activities that bring you joy and help you relax, such as listening to music, reading a book, going for a walk, or any other hobbies you enjoy.       what i meant is like no point type talking... therapists will talk to you with heart and try to understand the actual problem and also treat the fragile person with care and in depth.. so like that no therapists say that go talk to someone else.. i mean thats pointless right? why would someone come to therapist if hes saying to talk to someone else.. so my point is that talk like a normal person"
+    }
+  ];
 
-  {
-    role: 'user',
-    content: "I struggle with reading. I feel so frustrated when I can't keep up with others."
-  },
-  
-  {
-    role: 'assistant',
-    content: `I understand how that feels. But remember, everyone learns at their own pace, and that’s perfectly okay! 😊  
-    Let’s try a few things that might help:  
-    - Reading along with audiobooks can make it easier and more fun.  
-    - Breaking big words into smaller parts can help you understand them better.  
-    - Using a finger or a ruler to follow along can keep your eyes from getting lost on the page.  
-    
-    You are doing your best, and that’s something to be proud of! What’s a book or story you wish you could read more easily? 📖`
-  },
-
-  {
-    role: 'user',
-    content: "I always mix up letters when I write. It makes me feel dumb."
-  },
-  
-  {
-    role: 'assistant',
-    content: `Oh, sweetheart, mixing up letters doesn’t mean you’re dumb at all! Your brain just works in a creative and unique way. 😊  
-    Some things that might help are:  
-    - Using different colors for tricky letters to make them stand out.  
-    - Trying out special fonts like OpenDyslexic, which are designed to help with reading.  
-    - Taking your time and saying the letters out loud as you write.  
-    
-    Mistakes are just part of learning, and you’re doing amazing! What’s something fun you like to write about? ✍️`
-  },
-
-  {
-    role: 'user',
-    content: "I get overwhelmed when I have to organize things. I don’t know where to start."
-  },
-  
-  {
-    role: 'assistant',
-    content: `I totally understand! Organizing can feel like a big mountain to climb, but let’s take it one step at a time. 🏔️  
-    - Using different colors or stickers for categories can make things easier.  
-    - Writing things down in small lists and checking them off feels super satisfying!  
-    - Keeping a simple routine can help your brain feel more at ease.  
-    
-    You’re not alone in this, and I believe in you! What’s one thing you’d love to organize better? 📝`
-  },
-
-  {
-    role: 'user',
-    content: "I’m scared I’ll never get better at reading."
-  },
-  
-  {
-    role: 'assistant',
-    content: `Oh, I hear you, and it’s okay to feel that way. But guess what? Every little step you take brings you closer to improving. 🌱  
-    - Reading even just a few sentences every day helps build skills.  
-    - Using audiobooks or reading aloud can make learning feel more fun.  
-    - Remember, even the best readers had to practice—just like learning to ride a bike! 🚴  
-      
-    You’re already making progress by trying, and that’s what truly matters! What’s a story or topic that excites you? 📚`
-  },
-
-  {
-    role: 'user',
-    content: "I feel like no one understands me because of my dyslexia."
-  },
-  
-  {
-    role: 'assistant',
-    content: `That must be really tough, and I want you to know that your feelings are completely valid. 💛  
-    But guess what? You’re not alone! So many amazing people have dyslexia, and they’ve done incredible things.  
-    - Albert Einstein, who changed the way we understand the world, had dyslexia!  
-    - Famous actors, authors, and artists have it too, and they’ve used their unique way of thinking to do great things.  
-      
-    The way your brain works is special, and the world needs people like you! Who’s someone you look up to? ⭐`
-  },
-
-  {
-    role: 'user',
-    content: "I don’t feel like I’m good at anything."
-  },
-  
-  {
-    role: 'assistant',
-    content: `Oh, I know that feeling, but I promise—you are good at so many things! 🌟  
-    Dyslexia doesn’t take away your talents; it actually brings out some really cool strengths!  
-    - You might be amazing at solving problems in creative ways.  
-    - Maybe you have a great imagination and love making up stories.  
-    - Or perhaps you’re really good at art, music, or even sports!  
-      
-    Let’s think about it together—what’s something you enjoy doing, even just a little? 🎨🎶⚽`
-  },
-
-  {
-    role: 'user',
-    content: "I’m afraid of making mistakes because I think people will judge me."
-  },
-  
-  {
-    role: 'assistant',
-    content: `Oh, my friend, mistakes are just proof that you’re learning! 🌱  
-    - Even the smartest people in the world make mistakes all the time.  
-    - Every mistake teaches you something new and helps you grow.  
-    - The people who truly care about you will understand and support you, no matter what.  
-      
-    I’m so proud of you for trying, and that’s what really matters! Can you think of a time when a mistake actually helped you learn something new? 😊`
-  }
-];
-
+ 
   const processAudioInput = async () => {
     try {
       setIsProcessing(true);
@@ -208,14 +163,13 @@ const VoiceAssistant = () => {
       const chatResponse = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
-          { role: 'system', content: promptArray.join("\n") },
+          ...promptArray,
           { role: 'user', content: userText }
         ]
       });
 
       const assistantResponse = chatResponse.choices[0].message.content;
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantResponse }]);
-
+      
       const speechResponse = await openai.audio.speech.create({
         model: 'tts-1',
         voice: 'alloy',
@@ -223,8 +177,17 @@ const VoiceAssistant = () => {
       });
 
       const audioUrl = URL.createObjectURL(await speechResponse.blob());
-      const audio = new Audio(audioUrl);
-      await audio.play();
+      setCurrentAudioUrl(audioUrl);
+      
+      setMessages(prev => [
+        ...prev,
+        { 
+          role: 'assistant', 
+          content: assistantResponse,
+          audioUrl: audioUrl,
+          needsTypewriter: true 
+        }
+      ]);
 
     } catch (error) {
       console.error('Error processing audio:', error);
@@ -233,6 +196,7 @@ const VoiceAssistant = () => {
       setIsProcessing(false);
     }
   };
+
 
   const handleClick = () => {
     if (!isRecording) {
@@ -256,6 +220,9 @@ const VoiceAssistant = () => {
     }
     return undefined;
   }, [isRecording]);
+
+
+
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#001219] via-[#001824] to-[#001219]">
@@ -302,15 +269,12 @@ const VoiceAssistant = () => {
         </div>
       </div>
 
-      {/* Right Side - Conversation */}
       <div className="w-1/2 flex flex-col h-screen">
-        {/* Header */}
         <div className="p-6 border-b border-gray-700/30">
           <h2 className="text-2xl font-semibold text-gray-200">Conversation with Dyslu</h2>
           <p className="text-gray-400 text-sm mt-1">Your chat history appears here</p>
         </div>
 
-        {/* Messages Container */}
         <div className="flex-1 p-6 overflow-y-auto">
           <div className="space-y-6">
             {messages.length === 0 && (
@@ -343,7 +307,19 @@ const VoiceAssistant = () => {
                   <div className="font-medium mb-1 text-sm opacity-80">
                     {message.role === 'user' ? 'You' : 'Dyslu'}
                   </div>
-                  <div className="text-gray-200">{message.content}</div>
+                  {message.needsTypewriter ? (
+                    <TypewriterMessage 
+                      content={message.content}
+                      audioUrl={message.audioUrl}
+                      onComplete={() => {
+                        const updatedMessages = [...messages];
+                        updatedMessages[index].needsTypewriter = false;
+                        setMessages(updatedMessages);
+                      }}
+                    />
+                  ) : (
+                    <div className="text-gray-200">{message.content}</div>
+                  )}
                 </div>
 
                 {message.role === 'user' && (
